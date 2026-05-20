@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import mcp; print\\(mcp.__version__\\)\")",
+      "Bash(python -c \"import mcp.server.streamable_http; print\\('streamable_http OK'\\)\")",
+      "Bash(python -c \"import importlib.metadata; print\\(importlib.metadata.version\\('mcp'\\)\\)\")"
+    ]
+  }
+}
