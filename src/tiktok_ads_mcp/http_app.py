@@ -1,11 +1,16 @@
 """Starlette ASGI app that hosts:
 
-  - `/mcp`                : the MCP Streamable HTTP transport, gated by an
-                            Entra ID bearer token validated in middleware.
-  - `/tiktok/callback`    : OAuth redirect target. Exchanges the `code` for
-                            a TikTok access token and stores it against the
-                            user identified by the `state` parameter.
-  - `/healthz`            : unauthenticated health check.
+  - `/mcp`                            : the MCP Streamable HTTP transport,
+                                        gated by an Entra ID bearer token.
+  - `/tiktok/callback`                : OAuth redirect target for TikTok.
+  - `/.well-known/oauth-protected-resource`  : RFC 9728 resource metadata.
+  - `/.well-known/oauth-authorization-server`: RFC 8414 AS metadata.
+  - `/authorize` `/token` `/register` : OAuth proxy in front of Entra ID
+                                        (Claude.ai expects these on the MCP
+                                        server's own host).
+  - `/oauth/callback`                 : where Entra redirects to during the
+                                        proxied OAuth flow.
+  - `/healthz`                        : unauthenticated health check.
 
 Environment:
   TIKTOK_APP_ID           - the org's TikTok For Business app ID
@@ -13,9 +18,13 @@ Environment:
   TIKTOK_REDIRECT_URI     - public URL of /tiktok/callback (must match the
                             redirect URI configured in the TikTok app)
   ENTRA_TENANT_ID         - Entra tenant the MCP accepts tokens from
+  ENTRA_CLIENT_ID         - the Entra app registration's client ID, used by
+                            the OAuth proxy to talk to Entra
   ENTRA_AUDIENCE          - the audience claim required on incoming tokens
-                            (usually the Entra app registration's client ID,
-                            or `api://<client-id>`)
+                            (usually `api://<ENTRA_CLIENT_ID>`)
+  MCP_PUBLIC_URL          - the server's public base URL (e.g.,
+                            https://tiktok-ads-mcp.<region>.azurecontainerapps.io).
+                            Used to build absolute URLs in OAuth metadata.
 """
 
 from __future__ import annotations
@@ -35,6 +44,7 @@ from starlette.routing import Mount, Route
 from . import server as mcp_server
 from .auth.entra import EntraConfig, EntraValidator
 from .auth.middleware import EntraBearerMiddleware
+from .auth.oauth_proxy import OAuthProxy
 from .oauth_simple import TikTokOAuth
 from .token_store import TokenStore
 
@@ -56,6 +66,8 @@ def create_app() -> Starlette:
     redirect_uri = _required_env("TIKTOK_REDIRECT_URI")
     entra_tenant = _required_env("ENTRA_TENANT_ID")
     entra_audience = _required_env("ENTRA_AUDIENCE")
+    entra_client_id = _required_env("ENTRA_CLIENT_ID")
+    public_base_url = _required_env("MCP_PUBLIC_URL").rstrip("/")
 
     token_store = TokenStore(app_id=app_id, app_secret=app_secret)
     oauth = TikTokOAuth(app_id=app_id, app_secret=app_secret, redirect_uri=redirect_uri)
@@ -63,6 +75,12 @@ def create_app() -> Starlette:
 
     session_manager = StreamableHTTPSessionManager(app=mcp_server.app)
     entra_validator = EntraValidator(EntraConfig(tenant_id=entra_tenant, audience=entra_audience))
+    proxy = OAuthProxy(
+        public_base_url=public_base_url,
+        entra_tenant_id=entra_tenant,
+        entra_client_id=entra_client_id,
+        entra_audience=entra_audience,
+    )
 
     async def handle_mcp(scope, receive, send):
         await session_manager.handle_request(scope, receive, send)
@@ -127,18 +145,33 @@ def create_app() -> Starlette:
             logger.info("TikTok Ads MCP server started")
             yield
 
+    resource_metadata_url = f"{public_base_url}/.well-known/oauth-protected-resource"
+
     starlette_app = Starlette(
         debug=False,
         routes=[
             Mount("/mcp", app=handle_mcp),
             Route("/tiktok/callback", tiktok_callback, methods=["GET"]),
             Route("/healthz", healthz, methods=["GET"]),
+            Route("/.well-known/oauth-protected-resource",
+                  proxy.protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-authorization-server",
+                  proxy.authorization_server_metadata, methods=["GET"]),
+            Route("/authorize", proxy.authorize, methods=["GET"]),
+            Route("/oauth/callback", proxy.oauth_callback, methods=["GET"]),
+            Route("/token", proxy.token, methods=["POST"]),
+            Route("/register", proxy.register, methods=["POST"]),
         ],
         lifespan=lifespan,
     )
 
-    # Gate /mcp behind Entra; /tiktok/callback and /healthz pass through.
-    starlette_app.add_middleware(EntraBearerMiddleware, validator=entra_validator)
+    # Gate /mcp behind Entra; everything else passes through. On 401, advertise
+    # the protected-resource metadata URL so MCP clients can discover OAuth.
+    starlette_app.add_middleware(
+        EntraBearerMiddleware,
+        validator=entra_validator,
+        resource_metadata_url=resource_metadata_url,
+    )
 
     return starlette_app
 

@@ -33,10 +33,12 @@ class EntraBearerMiddleware:
         app: ASGIApp,
         validator: EntraValidator,
         protected_path_prefixes: Iterable[str] = ("/mcp",),
+        resource_metadata_url: str | None = None,
     ):
         self.app = app
         self.validator = validator
         self.protected_prefixes = tuple(protected_path_prefixes)
+        self.resource_metadata_url = resource_metadata_url
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -51,7 +53,7 @@ class EntraBearerMiddleware:
         request = Request(scope, receive)
         auth_header = request.headers.get("authorization", "")
         if not auth_header.lower().startswith("bearer "):
-            await _unauthorized(scope, receive, send, "Missing bearer token")
+            await self._unauthorized(scope, receive, send, "Missing bearer token")
             return
 
         token = auth_header.split(" ", 1)[1].strip()
@@ -59,7 +61,7 @@ class EntraBearerMiddleware:
             claims = self.validator.validate(token)
         except jwt.PyJWTError as e:
             logger.info("Entra token rejected: %s", e)
-            await _unauthorized(scope, receive, send, f"Invalid token: {e}")
+            await self._unauthorized(scope, receive, send, f"Invalid token: {e}")
             return
 
         # ASGI spec: scope["state"] is a per-request dict starlette merges
@@ -71,7 +73,17 @@ class EntraBearerMiddleware:
 
         await self.app(scope, receive, send)
 
-
-async def _unauthorized(scope: Scope, receive: Receive, send: Send, detail: str) -> None:
-    response = JSONResponse({"error": "unauthorized", "detail": detail}, status_code=401)
-    await response(scope, receive, send)
+    async def _unauthorized(self, scope: Scope, receive: Receive, send: Send, detail: str) -> None:
+        # RFC 9728 §5.1: point clients at our protected-resource metadata.
+        headers = {}
+        if self.resource_metadata_url:
+            headers["WWW-Authenticate"] = (
+                f'Bearer realm="mcp", '
+                f'resource_metadata="{self.resource_metadata_url}"'
+            )
+        response = JSONResponse(
+            {"error": "unauthorized", "detail": detail},
+            status_code=401,
+            headers=headers,
+        )
+        await response(scope, receive, send)

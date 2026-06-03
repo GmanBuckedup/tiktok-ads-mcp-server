@@ -3,7 +3,13 @@
     "allow": [
       "Bash(python -c \"import mcp; print\\(mcp.__version__\\)\")",
       "Bash(python -c \"import mcp.server.streamable_http; print\\('streamable_http OK'\\)\")",
-      "Bash(python -c \"import importlib.metadata; print\\(importlib.metadata.version\\('mcp'\\)\\)\")"
+      "Bash(python -c \"import importlib.metadata; print\\(importlib.metadata.version\\('mcp'\\)\\)\")",
+      "Bash(az containerapp *)",
+      "Bash(az acr *)",
+      "WebSearch",
+      "WebFetch(domain:dhanushgcse.github.io)",
+      "WebFetch(domain:support.claude.com)",
+      "WebFetch(domain:docs.claude.com)"
     ]
   }
 }
