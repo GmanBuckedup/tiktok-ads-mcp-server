@@ -7,8 +7,6 @@ import json
 import time
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlencode
-from six import string_types
-from six.moves.urllib.parse import urlencode, urlunparse  # noqa
 
 import httpx
 from pydantic import BaseModel
@@ -97,7 +95,7 @@ class TikTokAdsClient:
         # Merge with provided params
         if params:
             common_params.update(params)
-        query_string = urlencode({k: v if isinstance(v, string_types) else json.dumps(v) for k, v in common_params.items()})
+        query_string = urlencode({k: v if isinstance(v, str) else json.dumps(v) for k, v in common_params.items()})
         try:
             if method.upper() == "GET":
                 response = await self.client.get(url + "?" + query_string, headers=headers)
