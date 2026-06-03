@@ -1,0 +1,14 @@
+.git
+.gitignore
+.claude
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.env.*
+uv.lock
+README.md
+CONTRIBUTING.md
+LICENSE
+requirements-dev.txt
