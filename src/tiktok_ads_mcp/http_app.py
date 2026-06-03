@@ -67,6 +67,7 @@ def create_app() -> Starlette:
     entra_tenant = _required_env("ENTRA_TENANT_ID")
     entra_audience = _required_env("ENTRA_AUDIENCE")
     entra_client_id = _required_env("ENTRA_CLIENT_ID")
+    entra_client_secret = os.getenv("ENTRA_CLIENT_SECRET") or None
     public_base_url = _required_env("MCP_PUBLIC_URL").rstrip("/")
 
     token_store = TokenStore(app_id=app_id, app_secret=app_secret)
@@ -79,6 +80,7 @@ def create_app() -> Starlette:
         public_base_url=public_base_url,
         entra_tenant_id=entra_tenant,
         entra_client_id=entra_client_id,
+        entra_client_secret=entra_client_secret,
         entra_audience=entra_audience,
     )
 

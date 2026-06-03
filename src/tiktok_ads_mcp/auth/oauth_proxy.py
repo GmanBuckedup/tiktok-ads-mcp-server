@@ -70,11 +70,13 @@ class OAuthProxy:
         entra_tenant_id: str,
         entra_client_id: str,
         entra_audience: str,
+        entra_client_secret: str | None = None,
         entra_scope_name: str = "access_as_user",
     ):
         self.public_base_url = public_base_url.rstrip("/")
         self.entra_tenant_id = entra_tenant_id
         self.entra_client_id = entra_client_id
+        self.entra_client_secret = entra_client_secret
         self.entra_audience = entra_audience
         self.entra_scope_name = entra_scope_name
         self._pending: dict[str, _Pending] = {}
@@ -280,6 +282,8 @@ class OAuthProxy:
             "refresh_token": refresh_token,
             "scope": f"{self._full_entra_scope} offline_access openid profile",
         }
+        if self.entra_client_secret:
+            data["client_secret"] = self.entra_client_secret
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(self._entra_token_url, data=data)
         return _passthrough_entra_token(r)
@@ -295,6 +299,8 @@ class OAuthProxy:
             "redirect_uri": self._proxy_callback_url,
             "scope": f"{self._full_entra_scope} offline_access openid profile",
         }
+        if self.entra_client_secret:
+            data["client_secret"] = self.entra_client_secret
         async with httpx.AsyncClient(timeout=30.0) as client:
             return await client.post(self._entra_token_url, data=data)
 
