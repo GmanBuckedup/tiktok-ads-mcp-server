@@ -24,7 +24,7 @@ import secrets
 import time
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Iterable, Optional
 
 import httpx
 from starlette.requests import Request
@@ -70,6 +70,7 @@ class OAuthProxy:
         entra_tenant_id: str,
         entra_client_id: str,
         entra_audience: str,
+        allowed_redirect_uris: Iterable[str],
         entra_client_secret: str | None = None,
         entra_scope_name: str = "access_as_user",
     ):
@@ -79,8 +80,20 @@ class OAuthProxy:
         self.entra_client_secret = entra_client_secret
         self.entra_audience = entra_audience
         self.entra_scope_name = entra_scope_name
+        # Exact-match allowlist of redirect URIs the client may register/use.
+        # Without this, /authorize would deliver the authorization code to any
+        # caller-supplied URI, letting an attacker intercept a victim's code
+        # and mint a token for the victim's identity.
+        self._allowed_redirect_uris = frozenset(allowed_redirect_uris)
+        if not self._allowed_redirect_uris:
+            raise RuntimeError(
+                "OAuthProxy requires at least one allowed redirect URI"
+            )
         self._pending: dict[str, _Pending] = {}
         self._issued: dict[str, _IssuedCode] = {}
+
+    def _is_allowed_redirect(self, redirect_uri: Optional[str]) -> bool:
+        return bool(redirect_uri) and redirect_uri in self._allowed_redirect_uris
 
     # ---- URLs ----
 
@@ -129,6 +142,20 @@ class OAuthProxy:
     async def register(self, request: Request) -> JSONResponse:
         body = await request.json() if (await request.body()) else {}
         redirect_uris = body.get("redirect_uris") or []
+
+        # Defense in depth: refuse to register a client whose redirect URIs are
+        # not on the allowlist. /authorize enforces this too, but failing here
+        # surfaces the misconfiguration earlier.
+        disallowed = [u for u in redirect_uris if not self._is_allowed_redirect(u)]
+        if disallowed:
+            logger.warning("Rejected /register with disallowed redirect_uris: %r",
+                           disallowed)
+            return JSONResponse(
+                {"error": "invalid_redirect_uri",
+                 "error_description": "One or more redirect_uris are not allowed"},
+                status_code=400,
+            )
+
         return JSONResponse({
             "client_id": self.entra_client_id,
             "client_id_issued_at": int(time.time()),
@@ -151,6 +178,17 @@ class OAuthProxy:
             return JSONResponse(
                 {"error": "invalid_request",
                  "error_description": "redirect_uri and code_challenge are required"},
+                status_code=400,
+            )
+
+        # Reject unregistered redirect URIs *before* starting an Entra flow, so
+        # an authorization code can never be delivered to an attacker-chosen URI.
+        if not self._is_allowed_redirect(claude_redirect_uri):
+            logger.warning("Rejected /authorize with disallowed redirect_uri: %r",
+                           claude_redirect_uri)
+            return JSONResponse(
+                {"error": "invalid_request",
+                 "error_description": "redirect_uri is not registered for this client"},
                 status_code=400,
             )
 

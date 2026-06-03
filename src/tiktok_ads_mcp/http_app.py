@@ -25,6 +25,10 @@ Environment:
   MCP_PUBLIC_URL          - the server's public base URL (e.g.,
                             https://tiktok-ads-mcp.<region>.azurecontainerapps.io).
                             Used to build absolute URLs in OAuth metadata.
+  OAUTH_ALLOWED_REDIRECT_URIS - optional, comma-separated allowlist of
+                            redirect URIs the OAuth proxy will deliver
+                            authorization codes to. Defaults to Claude.ai's
+                            MCP connector callbacks.
 """
 
 from __future__ import annotations
@@ -59,6 +63,21 @@ def _required_env(name: str) -> str:
     return value
 
 
+# Default redirect URIs the OAuth proxy will hand authorization codes to.
+# These are Claude.ai's MCP connector callbacks. Override with the
+# OAUTH_ALLOWED_REDIRECT_URIS env var (comma-separated) for other clients.
+_DEFAULT_ALLOWED_REDIRECT_URIS = (
+    "https://claude.ai/api/mcp/auth_callback",
+    "https://claude.com/api/mcp/auth_callback",
+)
+
+
+def _allowed_redirect_uris() -> list[str]:
+    raw = os.getenv("OAUTH_ALLOWED_REDIRECT_URIS", "")
+    uris = [u.strip() for u in raw.split(",") if u.strip()]
+    return uris or list(_DEFAULT_ALLOWED_REDIRECT_URIS)
+
+
 def create_app() -> Starlette:
     load_dotenv()
 
@@ -83,6 +102,7 @@ def create_app() -> Starlette:
         entra_client_id=entra_client_id,
         entra_client_secret=entra_client_secret,
         entra_audience=entra_audience,
+        allowed_redirect_uris=_allowed_redirect_uris(),
     )
 
     # Class-based ASGI endpoint so Starlette treats it as a raw ASGI app
