@@ -39,7 +39,8 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Route
+from starlette.types import Receive, Scope, Send
 
 from . import server as mcp_server
 from .auth.entra import EntraConfig, EntraValidator
@@ -84,8 +85,17 @@ def create_app() -> Starlette:
         entra_audience=entra_audience,
     )
 
-    async def handle_mcp(scope, receive, send):
-        await session_manager.handle_request(scope, receive, send)
+    # Class-based ASGI endpoint so Starlette treats it as a raw ASGI app
+    # (not wrapped into a Request→Response handler) and we avoid the
+    # Mount("/mcp/") trailing-slash 307 redirect that some MCP clients
+    # won't follow on POST.
+    class _MCPEndpoint:
+        def __init__(self, manager):
+            self._manager = manager
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            await self._manager.handle_request(scope, receive, send)
+
+    mcp_endpoint = _MCPEndpoint(session_manager)
 
     async def tiktok_callback(request: Request) -> HTMLResponse:
         code = request.query_params.get("code")
@@ -152,7 +162,7 @@ def create_app() -> Starlette:
     starlette_app = Starlette(
         debug=False,
         routes=[
-            Mount("/mcp", app=handle_mcp),
+            Route("/mcp", mcp_endpoint, methods=["POST", "GET", "DELETE"]),
             Route("/tiktok/callback", tiktok_callback, methods=["GET"]),
             Route("/healthz", healthz, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource",
