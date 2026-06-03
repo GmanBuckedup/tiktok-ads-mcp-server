@@ -60,8 +60,10 @@ class EntraBearerMiddleware:
         try:
             claims = self.validator.validate(token)
         except jwt.PyJWTError as e:
+            # Log the specific reason server-side, but return a generic message
+            # so token-validation internals aren't disclosed to the caller.
             logger.info("Entra token rejected: %s", e)
-            await self._unauthorized(scope, receive, send, f"Invalid token: {e}")
+            await self._unauthorized(scope, receive, send, "Invalid or expired token")
             return
 
         # ASGI spec: scope["state"] is a per-request dict starlette merges

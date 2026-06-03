@@ -50,6 +50,7 @@ from . import server as mcp_server
 from .auth.entra import EntraConfig, EntraValidator
 from .auth.middleware import EntraBearerMiddleware
 from .auth.oauth_proxy import OAuthProxy
+from .auth.rate_limit import RateLimitMiddleware
 from .oauth_simple import TikTokOAuth
 from .token_store import TokenStore
 
@@ -203,6 +204,17 @@ def create_app() -> Starlette:
         EntraBearerMiddleware,
         validator=entra_validator,
         resource_metadata_url=resource_metadata_url,
+    )
+
+    # Throttle the unauthenticated OAuth endpoints per client IP. Added last so
+    # it runs outermost and can reject abusive callers before any work happens.
+    rate_limit_per_min = int(os.getenv("OAUTH_RATE_LIMIT_PER_MINUTE", "60"))
+    starlette_app.add_middleware(
+        RateLimitMiddleware,
+        limited_path_prefixes=(
+            "/authorize", "/token", "/register", "/oauth/callback", "/tiktok/callback",
+        ),
+        max_requests_per_minute=rate_limit_per_min,
     )
 
     return starlette_app

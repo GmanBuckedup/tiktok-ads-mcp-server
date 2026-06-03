@@ -1,6 +1,5 @@
 """Creative management tools for TikTok Ads MCP server."""
 
-import os
 from typing import Any, Dict, List, Optional
 
 from ..tiktok_client import TikTokAdsClient
@@ -91,80 +90,6 @@ class CreativeTools:
                 "success": False,
                 "error": str(e),
                 "message": "Failed to retrieve ad creatives"
-            }
-    
-    async def upload_image(
-        self,
-        image_path: str,
-        upload_type: str = "UPLOAD_BY_FILE",
-    ) -> Dict[str, Any]:
-        """Upload an image asset for ad creatives.
-        
-        Args:
-            image_path: Local path to image file
-            upload_type: Upload method (UPLOAD_BY_FILE)
-            
-        Returns:
-            Uploaded image information
-        """
-        try:
-            # Validate file exists
-            if not os.path.exists(image_path):
-                return {
-                    "success": False,
-                    "error": "File not found",
-                    "image_path": image_path,
-                    "message": f"Image file not found at path: {image_path}"
-                }
-            
-            # Validate file type
-            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
-            file_extension = os.path.splitext(image_path)[1].lower()
-            if file_extension not in allowed_extensions:
-                return {
-                    "success": False,
-                    "error": "Invalid file type",
-                    "image_path": image_path,
-                    "allowed_types": allowed_extensions,
-                    "message": f"File type {file_extension} not supported. Allowed: {', '.join(allowed_extensions)}"
-                }
-            
-            # Get file size
-            file_size = os.path.getsize(image_path)
-            max_size = 10 * 1024 * 1024  # 10MB
-            if file_size > max_size:
-                return {
-                    "success": False,
-                    "error": "File too large",
-                    "image_path": image_path,
-                    "file_size_mb": round(file_size / 1024 / 1024, 2),
-                    "max_size_mb": 10,
-                    "message": f"File size ({round(file_size / 1024 / 1024, 2)}MB) exceeds maximum (10MB)"
-                }
-            
-            result = await self.client.upload_image(image_path, upload_type)
-            
-            image_data = result.get("data", {})
-            
-            return {
-                "success": True,
-                "image_id": image_data.get("image_id"),
-                "image_url": image_data.get("image_url"),
-                "width": image_data.get("width"),
-                "height": image_data.get("height"),
-                "size": image_data.get("size"),
-                "format": image_data.get("format"),
-                "file_path": image_path,
-                "file_size_mb": round(file_size / 1024 / 1024, 2),
-                "message": f"Successfully uploaded image: {os.path.basename(image_path)}"
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "image_path": image_path,
-                "message": f"Failed to upload image: {os.path.basename(image_path) if os.path.exists(image_path) else 'unknown'}"
             }
     
     async def create_ad_creative(

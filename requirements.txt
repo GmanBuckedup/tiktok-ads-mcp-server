@@ -1,21 +1,25 @@
+# Pinned for reproducible, supply-chain-safe builds.
+# Bump deliberately and rebuild/redeploy when updating.
+
 # MCP (Model Context Protocol) core
-mcp>=1.0.0
+mcp==1.26.0
 
 # HTTP transport stack
-starlette>=0.37.0
-uvicorn[standard]>=0.30.0
+starlette==0.52.1
+uvicorn[standard]==0.41.0
 
-# Entra ID JWT validation
-PyJWT[crypto]>=2.8.0
+# Entra ID JWT validation (PyJWT + cryptography for RS256)
+PyJWT==2.11.0
+cryptography==46.0.5
 
 # HTTP client for TikTok API requests
-httpx>=0.25.0
+httpx==0.28.1
 
 # Data validation and parsing
-pydantic>=2.0.0
+pydantic==2.12.5
 
 # Environment variables
-python-dotenv>=1.0.0
+python-dotenv==1.2.2
 
 # Type hints support for older Python versions
-typing-extensions>=4.0.0
+typing-extensions==4.15.0

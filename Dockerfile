@@ -13,6 +13,11 @@ RUN pip install -r requirements.txt
 COPY src ./src
 COPY run_server.py ./
 
+# Run as an unprivileged user rather than root.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 ENV PYTHONPATH=/app/src \
     PORT=8000
 EXPOSE 8000

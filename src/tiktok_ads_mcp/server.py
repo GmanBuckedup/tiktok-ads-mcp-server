@@ -218,6 +218,75 @@ async def list_tools() -> List[Tool]:
                 "required": ["adgroup_ids", "date_range"],
             },
         ),
+        Tool(
+            name="tiktok_ads_get_ad_creatives",
+            description="List ad creatives for the advertiser account",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 10},
+                    "creative_type": {
+                        "type": "string",
+                        "enum": ["IMAGE", "VIDEO", "CAROUSEL"],
+                    },
+                },
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="tiktok_ads_get_custom_audiences",
+            description="List custom audiences for the advertiser account",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 10},
+                },
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="tiktok_ads_get_targeting_options",
+            description="Get available targeting options for campaigns",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": ["INTEREST", "BEHAVIOR", "DEMOGRAPHICS", "LOCATION"],
+                    },
+                    "country_code": {"type": "string"},
+                },
+                "required": ["type"],
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="tiktok_ads_generate_report",
+            description="Generate a custom performance report (async task)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "report_type": {
+                        "type": "string",
+                        "enum": ["BASIC", "AUDIENCE", "PLACEMENT", "DPA"],
+                    },
+                    "dimensions": {"type": "array", "items": {"type": "string"}},
+                    "metrics": {"type": "array", "items": {"type": "string"}},
+                    "date_range": {
+                        "type": "object",
+                        "properties": {
+                            "start_date": {"type": "string"},
+                            "end_date": {"type": "string"},
+                        },
+                        "required": ["start_date", "end_date"],
+                        "additionalProperties": False,
+                    },
+                    "filtering": {"type": "object"},
+                },
+                "required": ["report_type", "dimensions", "metrics", "date_range"],
+                "additionalProperties": False,
+            },
+        ),
     ])
 
     return tools
@@ -258,8 +327,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> List[TextContent]:
             result = await PerformanceTools(client).get_adgroup_performance(**arguments)
         elif name == "tiktok_ads_get_ad_creatives":
             result = await CreativeTools(client).get_ad_creatives(**arguments)
-        elif name == "tiktok_ads_upload_image":
-            result = await CreativeTools(client).upload_image(**arguments)
         elif name == "tiktok_ads_get_custom_audiences":
             result = await AudienceTools(client).get_custom_audiences(**arguments)
         elif name == "tiktok_ads_get_targeting_options":
@@ -271,9 +338,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> List[TextContent]:
 
         return _text(result)
 
-    except Exception as e:
+    except Exception:
+        # Log the full detail server-side; return a generic message so internal
+        # error text (paths, stack info) isn't leaked to the caller.
         logger.exception("Error executing tool %s", name)
-        return _text({"success": False, "error": f"Error executing {name}: {e}"})
+        return _text({"success": False, "error": f"Internal error executing {name}."})
 
 
 # ---------- auth tool implementations ----------

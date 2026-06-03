@@ -250,17 +250,6 @@ class TikTokAdsClient:
         }
         return await self._make_request("GET", "creative/get/", params=params)
     
-    async def upload_image(
-        self,
-        image_path: str,
-        upload_type: str = "UPLOAD_BY_FILE",
-    ) -> Dict[str, Any]:
-        """Upload an image file for ad creatives."""
-        with open(image_path, "rb") as f:
-            files = {"image_file": f}
-            data = {"upload_type": upload_type}
-            return await self._make_request("POST", "file/image/ad/upload/", data=data, files=files)
-    
     async def get_custom_audiences(self, limit: int = 10, page: int = 1) -> Dict[str, Any]:
         """Get custom audiences for the advertiser."""
         params = {
